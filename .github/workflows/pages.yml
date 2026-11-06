@@ -30,7 +30,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d
-      - uses: actions/upload-pages-artifact@ea3a4bfad2c117f866304081c2d07d1d92622f6a
+      - uses: grandchallenge/upload-pages-artifact@4934497e00858680775a65f544192e61e1b1b3cb
         with:
           path: .
       - id: deploy
