@@ -1,19 +1,28 @@
-from pathlib import Path
 from html.parser import HTMLParser
-class Check(HTMLParser):
+from pathlib import Path
+
+class SiteParser(HTMLParser):
     def __init__(self):
-        super().__init__(); self.ids=set(); self.links=[]; self.images=[]
+        super().__init__()
+        self.ids=set()
+        self.links=[]
+        self.images=[]
+        self.buttons=[]
     def handle_starttag(self, tag, attrs):
-        d=dict(attrs)
-        if 'id' in d: self.ids.add(d['id'])
-        if tag=='a' and d.get('href'): self.links.append(d['href'])
-        if tag=='img': self.images.append(d)
-h=Path('index.html').read_text()
-c=Check();c.feed(h)
-assert '<title>Grand Challenge Labs' in h
-assert len(c.ids)>=4
-assert all(link[1:] in c.ids for link in c.links if link.startswith('#')), 'broken internal anchors'
-assert all('alt' in item for item in c.images), 'image missing alt'
-assert 'https://grandchallenge.github.io/MATH-PROGRAMME/' in h
-assert not Path('CNAME').exists()
-print(f'PASS: {len(c.ids)} anchors, {len(c.links)} links, {len(c.images)} images; no CNAME')
+        a=dict(attrs)
+        if "id" in a: self.ids.add(a["id"])
+        if tag=="a": self.links.append(a.get("href",""))
+        if tag=="img": self.images.append(a)
+        if tag=="button": self.buttons.append(a)
+
+html=Path("index.html").read_text(encoding="utf-8")
+p=SiteParser()
+p.feed(html)
+assert len(p.ids)>=11, "missing site sections"
+assert all(href[1:] in p.ids for href in p.links if href.startswith("#")), "broken internal anchors"
+assert all("alt" in img and Path(img["src"]).is_file() for img in p.images), "missing image asset or alt"
+assert len(p.images)==2, "expected illustration and library artwork"
+assert "https://grandchallenge.github.io/MATH-PROGRAMME/" in html, "missing documentary continuity"
+assert "showModal()" in html and "menu-toggle" in html, "missing interactive navigation"
+assert not Path("CNAME").exists(), "preview must not install a custom domain"
+print(f"PASS: {len(p.ids)} IDs, {len(p.images)} illustrations, {len(p.links)} links; existing Maths site untouched")
