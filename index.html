@@ -15,6 +15,21 @@
 @media(max-width:600px){.shell{width:min(100% - 24px,1440px)}.identity{font-size:17px}.mark{width:32px;height:32px}.masthead{gap:10px}.mast-actions{gap:4px}.updates{display:none}.hero{height:620px}.hero-art{width:100%;right:-65px;top:233px;height:390px;object-fit:cover;object-position:center}.hero:after{width:100%;height:285px;bottom:auto;background:linear-gradient(var(--paper) 82%, transparent)}.hero-copy{left:4px;top:8px;width:100%;}.hero h1{font-size:59px}.brand-rule{width:206px;margin:11px 0 8px}.tagline{font-size:22px}.lede{max-width:300px;font-size:14px;line-height:1.32}.hero-cta{font-size:12px;padding:7px}.quick-links{position:absolute;top:386px;background:#f8f7f2eb;padding:12px;margin:0;left:0;gap:8px}.quick-links a{font-size:11px}.programme-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.programme{padding:12px 8px;min-height:210px}.programme h3{font-size:18px}.programme-graphic{height:60px}.programme p{font-size:12px}.record{display:block}.record-title,.record-copy{border:0;padding:12px 7px}.record-links{margin-top:20px}.library-art{height:auto;max-height:none}.below-links{grid-template-columns:1fr}.below,.method{padding:42px 10px}.below-links a{font-size:17px}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
 
+/* Hero integrity: mockup artwork contains editorial text in its left edge.
+   Crop that edge inside a dedicated illustration viewport; never layer the
+   live heading over the image. Keep both responsive and accessible. */
+.hero{isolation:isolate}
+.hero-visual{position:absolute;inset:0 0 0 420px;overflow:hidden;pointer-events:none}
+.hero-art{position:absolute;top:0;right:0;left:auto;width:140%;height:100%;object-fit:cover;object-position:right center;max-width:none}
+.hero:after{display:none}
+.hero-copy{left:12px;top:16px;width:395px;z-index:2}
+.hero h1{font-size:clamp(64px,5.35vw,82px);line-height:.91;letter-spacing:-.065em}
+.tagline{font-size:22px}
+.lede{font-size:16px;line-height:1.32;max-width:300px}
+@media(max-width:900px){.hero{height:525px}.hero-visual{left:355px}.hero-copy{width:335px}.hero h1{font-size:clamp(61px,7vw,73px)}}
+@media(max-width:600px){.hero{height:725px}.hero-copy{top:10px;left:5px;width:calc(100% - 10px)}.hero h1{font-size:clamp(53px,11vw,67px)}.hero-visual{inset:345px 0 0 0}.hero-art{width:145%;height:100%;top:0;right:0;object-fit:cover;object-position:right center}.quick-links{position:static;background:transparent;padding:0;margin-top:15px;gap:8px}.lede{font-size:14px;max-width:300px}.tagline{font-size:20px}}
+@media(min-width:601px) and (max-width:720px){.hero-visual{left:330px}.hero-copy{width:315px}.hero h1{font-size:60px}}
+
 </style>
   
 </head>
@@ -40,7 +55,7 @@
 </header>
 <main id="main" class="shell">
   <section class="hero" id="top" aria-label="Introduction">
-    <img class="hero-art" src="assets/campus.webp" width="1150" height="521" alt="An imagined scientific research campus: a GCL coordination tower, geodesic experiments dome, large communications dish, fabrication workshop, library, walkways, researchers and little helper robots, rendered as a detailed architectural ink engraving." fetchpriority="high">
+    <div class="hero-visual" aria-hidden="false"><img class="hero-art" src="assets/campus.webp" width="1150" height="521" alt="An imagined scientific research campus: a GCL coordination tower, geodesic experiments dome, large communications dish, fabrication workshop, library, walkways, researchers and little helper robots, rendered as a detailed architectural ink engraving." fetchpriority="high"></div>
     <div class="hero-copy">
       <h1>Grand<br>Challenge<br>Labs</h1>
       <div class="brand-rule"></div>
