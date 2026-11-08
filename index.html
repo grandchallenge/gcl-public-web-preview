@@ -46,6 +46,14 @@
 @media(max-width:900px){.hero{height:auto;min-height:0}.hero-art{position:static;right:auto;top:auto;width:100%;height:auto;opacity:1;object-fit:contain}}
 @media(max-width:600px){.hero{height:auto;min-height:0}.hero-art{position:static;right:auto;top:auto;width:100%;height:auto;object-fit:contain}.hero-links{display:grid;grid-template-columns:1fr 1fr;gap:14px;font-size:12px}.hero-hotspot{display:none}}
 
+
+/* Approved clean architectural engraving: full-image presentation with no overlaid copy. */
+.hero{position:relative;overflow:visible;height:auto;min-height:0}
+.hero-art{display:block;position:static;width:100%;max-width:100%;height:auto;object-fit:contain;object-position:center;opacity:1;image-rendering:auto}
+.hero-introduction{display:flex;align-items:baseline;justify-content:space-between;gap:2.5rem;border-top:1px solid var(--rule);padding:17px 10px 6px}
+.hero-introduction p{margin:0;font-size:15px;line-height:1.5}
+.hero-introduction .hero-motto{font-size:clamp(21px,2.4vw,30px);color:var(--blue);white-space:nowrap;line-height:1.2}
+@media(max-width:690px){.hero-introduction{display:block;padding-top:16px}.hero-introduction p+p{margin-top:9px}}
 </style>
   
 </head>
@@ -72,14 +80,14 @@
 <main id="main" class="shell">
   <section class="hero" id="top" aria-label="Grand Challenge Labs illustrated research campus">
     <h1 class="visually-hidden">Grand Challenge Labs</h1>
-    <img class="hero-art" src="assets/hero-full.webp" width="1402" height="560" alt="Grand Challenge Labs: Humanity Expects Better. A detailed architectural ink engraving of a speculative research campus with an observatory, experimentation dome, coordination tower, fabrication hall, library, small robots and researchers. The original editorial composition is retained in full, including its title and annotations." fetchpriority="high">
-    <a class="hero-hotspot" href="#research" aria-label="Explore the Research Estate"></a>
+    <img class="hero-art" src="assets/hero-clean.webp" width="1984" height="793" alt="An imaginative architectural ink engraving of the Grand Challenge Labs research campus, featuring a central GCL tower, experimental dome, radio telescope, fabrication workshop, library, discovery dome, researchers and small robots. Blue highlights accent the water and scientific apparatus." fetchpriority="high" decoding="async">
   </section>
+  <div class="hero-introduction" aria-label="Institutional introduction"><p class="hero-motto">Humanity Expects Better</p><p>Grand Challenge Labs investigates difficult problems in mathematics, computation, and adaptive intelligence.</p></div>
   <nav class="hero-links" aria-label="Featured destinations">
     <a href="#research">Research programmes <span aria-hidden="true">→</span></a>
     <a href="https://grandchallenge.github.io/MATH-PROGRAMME/documentaries/">Papers &amp; documentation <span aria-hidden="true">→</span></a>
     <a href="#library">Library &amp; archive <span aria-hidden="true">→</span></a>
-    <a class="view-art" href="assets/hero-full.webp" target="_blank" rel="noopener">View full-size illustration <span aria-hidden="true">↗</span></a>
+    <a class="view-art" href="assets/hero-clean.webp" target="_blank" rel="noopener">View full-size illustration <span aria-hidden="true">↗</span></a>
   </nav>
   <div class="rule"></div>
   <section id="research" class="estate" aria-labelledby="estate-title">
