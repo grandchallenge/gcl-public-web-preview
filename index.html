@@ -30,6 +30,22 @@
 @media(max-width:600px){.hero{height:725px}.hero-copy{top:10px;left:5px;width:calc(100% - 10px)}.hero h1{font-size:clamp(53px,11vw,67px)}.hero-visual{inset:345px 0 0 0}.hero-art{width:145%;height:100%;top:0;right:0;object-fit:cover;object-position:right center}.quick-links{position:static;background:transparent;padding:0;margin-top:15px;gap:8px}.lede{font-size:14px;max-width:300px}.tagline{font-size:20px}}
 @media(min-width:601px) and (max-width:720px){.hero-visual{left:330px}.hero-copy{width:315px}.hero h1{font-size:60px}}
 
+
+/* Full-composition hero: no cropping, forced aspect ratio, or overlay text. */
+.visually-hidden{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+.hero{height:auto;min-height:0;position:relative;overflow:visible;isolation:auto}
+.hero-art{display:block;position:static;inset:auto;width:100%;max-width:100%;height:auto;min-height:0;object-fit:contain;object-position:center;opacity:1;image-rendering:auto}
+.hero:after{display:none}
+.hero-hotspot{position:absolute;left:2.5%;top:54%;width:15%;height:8%;border-radius:5px}
+.hero-hotspot:focus-visible{outline:3px solid var(--blue);outline-offset:1px}
+.hero-links{display:flex;align-items:center;justify-content:space-between;gap:15px;flex-wrap:wrap;padding:15px 10px;border-top:1px solid var(--rule);font:12px/1.5 var(--sans);letter-spacing:.02em}
+.hero-links a{color:var(--ink);text-decoration:none}
+.hero-links a span{color:var(--blue)}
+.hero-links a:hover{text-decoration:underline}
+.hero-links .view-art{color:var(--blue)}
+@media(max-width:900px){.hero{height:auto;min-height:0}.hero-art{position:static;right:auto;top:auto;width:100%;height:auto;opacity:1;object-fit:contain}}
+@media(max-width:600px){.hero{height:auto;min-height:0}.hero-art{position:static;right:auto;top:auto;width:100%;height:auto;object-fit:contain}.hero-links{display:grid;grid-template-columns:1fr 1fr;gap:14px;font-size:12px}.hero-hotspot{display:none}}
+
 </style>
   
 </head>
@@ -54,21 +70,17 @@
   </div>
 </header>
 <main id="main" class="shell">
-  <section class="hero" id="top" aria-label="Introduction">
-    <div class="hero-visual" aria-hidden="false"><img class="hero-art" src="assets/campus.webp" width="1150" height="521" alt="An imagined scientific research campus: a GCL coordination tower, geodesic experiments dome, large communications dish, fabrication workshop, library, walkways, researchers and little helper robots, rendered as a detailed architectural ink engraving." fetchpriority="high"></div>
-    <div class="hero-copy">
-      <h1>Grand<br>Challenge<br>Labs</h1>
-      <div class="brand-rule"></div>
-      <p class="tagline">Humanity Expects Better</p>
-      <p class="lede">An independent research institution exploring difficult problems in mathematics, computation, and adaptive intelligence.</p>
-      <a class="outline-button hero-cta" href="#research">Explore the Research Estate <span aria-hidden="true">→</span></a>
-      <div class="quick-links" aria-label="Explore GCL">
-        <a href="#research"><span class="quick-icon" aria-hidden="true">◇</span> Research Programmes</a>
-        <a href="https://grandchallenge.github.io/MATH-PROGRAMME/documentaries/"><span class="quick-icon" aria-hidden="true">▣</span> Papers &amp; Documentation</a>
-        <a href="#library"><span class="quick-icon" aria-hidden="true">▤</span> Library &amp; Archive</a>
-      </div>
-    </div>
+  <section class="hero" id="top" aria-label="Grand Challenge Labs illustrated research campus">
+    <h1 class="visually-hidden">Grand Challenge Labs</h1>
+    <img class="hero-art" src="assets/hero-full.webp" width="1402" height="560" alt="Grand Challenge Labs: Humanity Expects Better. A detailed architectural ink engraving of a speculative research campus with an observatory, experimentation dome, coordination tower, fabrication hall, library, small robots and researchers. The original editorial composition is retained in full, including its title and annotations." fetchpriority="high">
+    <a class="hero-hotspot" href="#research" aria-label="Explore the Research Estate"></a>
   </section>
+  <nav class="hero-links" aria-label="Featured destinations">
+    <a href="#research">Research programmes <span aria-hidden="true">→</span></a>
+    <a href="https://grandchallenge.github.io/MATH-PROGRAMME/documentaries/">Papers &amp; documentation <span aria-hidden="true">→</span></a>
+    <a href="#library">Library &amp; archive <span aria-hidden="true">→</span></a>
+    <a class="view-art" href="assets/hero-full.webp" target="_blank" rel="noopener">View full-size illustration <span aria-hidden="true">↗</span></a>
+  </nav>
   <div class="rule"></div>
   <section id="research" class="estate" aria-labelledby="estate-title">
     <div class="estate-intro" id="mathematics">
