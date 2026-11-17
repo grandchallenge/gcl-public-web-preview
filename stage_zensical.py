@@ -45,6 +45,28 @@ def stage(root: Path, source: Path, expected_sha: str) -> dict:
         raise RuntimeError('staging build path already exists')
     conf['site_url'] = STAGING_URL
     conf['site_dir'] = '.zensical-preview-site'
+    # Staging-only accessibility repair: Zensical 0.1.1 renders search as a
+    # native button, whose default dark text is nearly invisible in the GCL
+    # navy header. Do not change the production renderer or source Markdown.
+    css_rel = 'stylesheets/zensical-staging-search.css'
+    css = source / '.zensical-probe-docs' / css_rel
+    if css.exists():
+        raise RuntimeError('staging search override unexpectedly exists')
+    css.write_text(
+        '/* Zensical staging: search trigger contrast and visible focus. */\n'
+        '.md-header .md-search__button { '
+        'color: #f8fafc !important; background: #17283e !important; '
+        'border: 1px solid #e7bd60 !important; }\n'
+        '.md-header .md-search__button:hover { '
+        'background: #263950 !important; color: #ffffff !important; }\n'
+        '.md-header .md-search__button:focus-visible { '
+        'outline: 3px solid #ffe09a !important; outline-offset: 3px !important; }\n'
+        '.md-header .md-search__button svg { color: #f8fafc !important; }\n',
+        encoding='utf-8')
+    prior_css = conf.get('extra_css', [])
+    if not isinstance(prior_css, list):
+        raise RuntimeError('staging extra_css list malformed')
+    conf['extra_css'] = [*prior_css, css_rel]
     staging_conf = source / 'zensical-preview.yml'
     if staging_conf.exists():
         raise RuntimeError('staging config already exists')
@@ -63,6 +85,10 @@ def stage(root: Path, source: Path, expected_sha: str) -> dict:
     home = (candidate / 'index.html').read_text(encoding='utf-8')
     if '/gcl-public-web-preview/zensical/' not in home:
         raise RuntimeError('staging base path missing from generated homepage')
+    if 'zensical-staging-search.css' not in home:
+        raise RuntimeError('staging search contrast override missing from generated HTML')
+    if not (candidate / css_rel).is_file():
+        raise RuntimeError('staging search contrast override missing from output')
     # Keep existing public preview homepage and its assets exactly as they are.
     dest = root / '.pages-output'
     if dest.exists():
