@@ -60,7 +60,7 @@ function status(s,cls){el('state').textContent=s;el('connection').className='con
 async function tick(){
  if(inFlight||paused||document.hidden)return;inFlight=true;controller=new AbortController();const deadline=setTimeout(()=>controller.abort(),10000);
  try{
-  const response=await fetch('https://raw.githubusercontent.com/grandchallenge/grandchallenge.github.io/control-public-feed/feed.json',{cache:'no-cache',signal:controller.signal,credentials:'omit',referrerPolicy:'no-referrer'});
+  const response=await fetch('https://raw.githubusercontent.com/grandchallenge/grandchallenge.github.io/control-public-feed/feed.json?window='+Math.floor(Date.now()/120000),{cache:'no-cache',signal:controller.signal,credentials:'omit',referrerPolicy:'no-referrer'});
   if(!response.ok)throw Error('feed');
   const raw=await response.text();if(raw.length>100000)throw Error('size');
   const feed=JSON.parse(raw);
