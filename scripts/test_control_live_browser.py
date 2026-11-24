@@ -17,7 +17,7 @@ try:
             page=b.new_page(viewport={"width":width,"height":height})
             errors=[];page.on("pageerror",lambda e:errors.append(str(e)))
             payload=[feed]
-            page.route(URL,lambda route:route.fulfill(json=payload[0],headers={"Access-Control-Allow-Origin":"*"}))
+            page.route(URL+"?window=*",lambda route:route.fulfill(json=payload[0],headers={"Access-Control-Allow-Origin":"*"}))
             page.goto(f"http://127.0.0.1:{httpd.server_port}/assets/operations/live.html")
             expect(page.locator("#state")).to_have_text("Feed reachable")
             expect(page.locator(".event")).to_have_count(2)
