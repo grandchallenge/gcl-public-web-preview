@@ -23,6 +23,8 @@ jobs:
           python-version: '3.12'
       - name: Preserve existing public preview homepage contract
         run: python validate.py
+      - name: Test source-authorized console release boundary
+        run: python scripts/test_public_console.py
       - name: Checkout pinned public mathematics source read-only
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:

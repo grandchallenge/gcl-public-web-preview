@@ -97,6 +97,8 @@ def stage(root: Path, source: Path, expected_sha: str) -> dict:
     shutil.copy2(root / 'index.html', dest / 'index.html')
     shutil.copy2(root / '.nojekyll', dest / '.nojekyll')
     shutil.copytree(root / 'assets', dest / 'assets')
+    from scripts.public_console import build as build_public_console
+    build_public_console(root, dest / 'assets' / 'operations')
     shutil.copytree(candidate, dest / 'zensical')
     if digest(dest / 'index.html') != digest(root / 'index.html'):
         raise RuntimeError('preview homepage changed during packaging')
