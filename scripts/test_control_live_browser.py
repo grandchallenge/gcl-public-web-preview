@@ -4,6 +4,8 @@ from datetime import datetime,timezone
 from playwright.sync_api import sync_playwright,expect
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 URL="https://raw.githubusercontent.com/grandchallenge/grandchallenge.github.io/control-public-feed/activity.json"
+REF="https://api.github.com/repos/grandchallenge/grandchallenge.github.io/git/ref/heads/control-public-feed"
+IMM="https://raw.githubusercontent.com/grandchallenge/grandchallenge.github.io/"+"a"*40+"/activity.json"
 NOW=1800000000000
 def stamp(ms):return datetime.fromtimestamp(ms/1000,timezone.utc).isoformat()
 T=stamp(NOW-5000);U=stamp(NOW-2000)
@@ -27,6 +29,13 @@ try:
                 calls.append(route.request.url)
                 route.fulfill(json=payload[0],headers={"Access-Control-Allow-Origin":"*"})
             q.route(URL+"?window=*",serve)
+            ref_calls=[]; immutable=[None]
+            def ref(route):
+                ref_calls.append(route.request.url)
+                if immutable[0] is None:route.fulfill(status=503,body="unavailable",headers={"Access-Control-Allow-Origin":"*"})
+                else:route.fulfill(json={"ref":"refs/heads/control-public-feed","object":{"type":"commit","sha":"a"*40}},headers={"Access-Control-Allow-Origin":"*"})
+            q.route(REF+"?window=*",ref)
+            q.route(IMM,lambda route:route.fulfill(json=immutable[0],headers={"Access-Control-Allow-Origin":"*"}))
             q.goto(f"http://127.0.0.1:{server.server_port}/assets/operations/live.html")
             expect(q.locator("#state")).to_have_text("Recent publication")
             expect(q.locator(".event")).to_have_count(7)
@@ -54,6 +63,17 @@ try:
             q.evaluate("tick(true)")
             expect(q.locator("#state")).to_contain_text("unavailable")
             assert "PRIVATE_CANARY" not in q.locator("body").inner_text()
+            # Stale raw branch, fresh immutable fallback, and rollback prevention.
+            q.evaluate(f"Date.now=()=>{NOW+800000}")
+            payload[0]={**feed,"epoch":2,"epoch_reason":"source_gap","epoch_started_at":stamp(NOW+615000),"published_at":stamp(NOW+620000),"records":[]}
+            immutable[0]={**payload[0],"published_at":stamp(NOW+800000),"records":[{**rows[0],"accepted_at":stamp(NOW+799000),"finished_at":stamp(NOW+799500)}]}
+            q.evaluate("tick(true)")
+            expect(q.locator(".event")).to_have_count(2)
+            expect(q.locator("#state")).to_have_text("Recent publication")
+            before=len(ref_calls)
+            q.evaluate("tick(true)")
+            expect(q.locator(".event")).to_have_count(2)
+            assert len(ref_calls)==before
             assert not errors,errors
             print("PASS",width,"mixed operations, failure, accepted-only, stale heartbeat, gap recovery, hostile schema, pause")
             q.close()
