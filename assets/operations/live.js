@@ -68,6 +68,38 @@ function freshness(){
  const stale=Date.now()-Date.parse(lastUpdate)>600000;
  status(stale?'Stale publication · health unknown':'Recent publication',stale?'stale':'published')
 }
+const RAW_BASE='https://raw.githubusercontent.com/grandchallenge/grandchallenge.github.io/';
+const REF_URL='https://api.github.com/repos/grandchallenge/grandchallenge.github.io/git/ref/heads/control-public-feed';
+const REF_KEY='gcl-public-activity-ref-check-v2';
+let lastRefCheck=-Infinity;
+function reserveRefCheck(){
+ const t=Date.now();let previous=lastRefCheck;
+ try{const saved=Number(localStorage.getItem(REF_KEY));if(Number.isFinite(saved))previous=Math.max(previous,saved)}catch{}
+ if(t-previous<120000)return false;
+ lastRefCheck=t;try{localStorage.setItem(REF_KEY,String(t))}catch{}
+ return true
+}
+async function readText(url,max=100000){
+ const response=await fetch(url,{cache:'no-cache',signal:controller.signal,credentials:'omit',referrerPolicy:'no-referrer',redirect:'error'});
+ if(!response.ok)throw Error('feed');
+ const raw=await response.text();if(raw.length>max)throw Error('size');return raw
+}
+async function readPublication(windowId){
+ let raw=null,primaryError=null;
+ try{raw=await readText(RAW_BASE+'control-public-feed/activity.json?window='+windowId)}catch(e){primaryError=e}
+ const parsed=raw===null?null:parse(raw);
+ const at=parsed&&typeof parsed.published_at==='string'?Date.parse(parsed.published_at):NaN;
+ if((!Number.isFinite(at)||Date.now()-at>45000)&&!controller.signal.aborted&&reserveRefCheck()){
+  try{
+   const ref=JSON.parse(await readText(REF_URL+'?window='+Math.floor(Date.now()/120000),8192));
+   if(ref.ref!=='refs/heads/control-public-feed'||ref.object?.type!=='commit'||typeof ref.object.sha!=='string'||!/^[0-9a-f]{40}$/.test(ref.object.sha))throw Error('ref');
+   const immutable=await readText(RAW_BASE+ref.object.sha+'/activity.json');
+   const candidate=JSON.parse(immutable);
+   if(candidate.schema==='GCL_CONTROL_ACTIVITY_FEED/2'&&Number.isFinite(Date.parse(candidate.published_at))&&(!Number.isFinite(at)||Date.parse(candidate.published_at)>=at))return immutable
+  }catch(e){/* Keep the ordinary response or the previous verified display. */}
+ }
+ if(raw===null)throw primaryError||Error('feed');return raw
+}
 async function tick(force=false){
  if(inFlight||paused||document.hidden)return;
  if(!failures)freshness();
@@ -75,16 +107,15 @@ async function tick(force=false){
  if(!force&&(windowId===lastWindow||performance.now()<retryAt))return;
  inFlight=true;controller=new AbortController();const deadline=setTimeout(()=>controller.abort(),10000);
  try{
-  const response=await fetch('https://raw.githubusercontent.com/grandchallenge/grandchallenge.github.io/control-public-feed/activity.json?window='+windowId,{cache:'no-cache',signal:controller.signal,credentials:'omit',referrerPolicy:'no-referrer'});
-  if(!response.ok)throw Error('feed');
-  const raw=await response.text();if(raw.length>100000)throw Error('size');
+  const raw=await readPublication(windowId);
   const feed=JSON.parse(raw);
   const keys=(v,k)=>v&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).sort().join('|')===k.slice().sort().join('|');
   const date=v=>typeof v==='string'&&v.length<=40&&Number.isFinite(Date.parse(v));
   const ops=new Set(['run_bash','system_status','project_queue_audit','project_queue_reconcile','project_queue_views_readback','governed_repository_head','governed_repository_file','governed_repository_pr','governed_repository_document_proposal','external_github_merge_inspect','outbound_audit_health']);
   const targets=new Set(['CHAD Bash','CONTROL service','GCL Worker Queue #2','GCL saved views','unapproved-repository','grandchallenge-repository','grandchallenge/MATHSOLVE','grandchallenge/MATH-PROGRAMME','grandchallenge/ADAPTIVE-INTELLIGENCE-ATLAS','grandchallenge/COMPUTATIONAL-DIFFICULTY-ATLAS','grandchallenge/CONTROL']);
   if(!keys(feed,['schema','policy','coverage','epoch','epoch_started_at','epoch_reason','published_at','records','withheld_candidates','retention_limit'])||feed.schema!=='GCL_CONTROL_ACTIVITY_FEED/2'||feed.policy!=='GCL_CONTROL_PUBLIC_LIFECYCLE/2'||feed.coverage!=='authorized_control_lifecycle_only'||!Number.isInteger(feed.epoch)||feed.epoch<1||!date(feed.epoch_started_at)||!['activation','source_gap','index_reset'].includes(feed.epoch_reason)||!date(feed.published_at)||Date.parse(feed.published_at)<Date.parse(feed.epoch_started_at)||!Array.isArray(feed.records)||feed.records.length>48||feed.retention_limit!==48||!Number.isInteger(feed.withheld_candidates)||feed.withheld_candidates<0||feed.withheld_candidates>48)throw Error('schema');
-  if(feed.epoch<lastEpoch||(feed.epoch===lastEpoch&&lastEpochStart!==null&&feed.epoch_started_at!==lastEpochStart))throw Error('older epoch');
+  if(feed.epoch<lastEpoch){lastWindow=windowId;freshness();return}
+  if(feed.epoch===lastEpoch&&lastEpochStart!==null&&feed.epoch_started_at!==lastEpochStart)throw Error('epoch identity');
   const records=[],seen=new Set();
   let latest=null;
   for(const r of feed.records){
@@ -103,7 +134,7 @@ async function tick(force=false){
    const last=r.finished_at||r.accepted_at;if(latest===null||Date.parse(last)>Date.parse(latest))latest=last;
   }
   if(paused||document.hidden)return;
-  if(lastUpdate&&Date.parse(feed.published_at)<Date.parse(lastUpdate))throw Error('older cached publication');
+  if(lastUpdate&&Date.parse(feed.published_at)<Date.parse(lastUpdate)){lastWindow=windowId;retryAt=0;failures=0;freshness();return}
   lastWindow=windowId;retryAt=0;failures=0;lastEpoch=feed.epoch;lastEpochStart=feed.epoch_started_at;
   lastUpdate=feed.published_at;freshness();
   if(raw===lastRaw)return;
