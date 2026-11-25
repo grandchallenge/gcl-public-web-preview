@@ -3,6 +3,7 @@
 const el=id=>document.getElementById(id), log=el('log'), table=el('table'), channels=['request','result','failure'];
 let all=[],filter='all',paused=false,follow=true,inFlight=false,lastUpdate=null,controller=null;
 const opened=new Set(),nodes=new Map();
+let lastWindow=null,lastRaw=null,retryAt=0,failures=0;
 function make(tag,cls,text){const n=document.createElement(tag);if(cls)n.className=cls;if(text!==undefined)n.textContent=String(text);return n}
 for(const c of channels){const m=make('div','metric');m.dataset.stream=c;const label=make('div','metric-label',c.toUpperCase()), count=make('strong','','—'),series=make('div','series');count.id='count-'+c;series.id='series-'+c;series.setAttribute('aria-hidden','true');label.append(count);m.append(label,series);el('metrics').append(m)}
 function parse(s){try{return JSON.parse(s)}catch{return null}}
@@ -57,10 +58,13 @@ function metrics(){
  el('range-start').textContent=valid.length?shortTime(lo):'—';el('range-end').textContent=valid.length?shortTime(hi):'—'
 }
 function status(s,cls){el('state').textContent=s;el('connection').className='connection '+cls;el('updated').textContent=lastUpdate?'Last publication '+shortTime(lastUpdate):'Awaiting snapshot'}
-async function tick(){
- if(inFlight||paused||document.hidden)return;inFlight=true;controller=new AbortController();const deadline=setTimeout(()=>controller.abort(),10000);
+async function tick(force=false){
+ if(inFlight||paused||document.hidden)return;
+ const windowId=Math.floor(Date.now()/10000);
+ if(!force&&(windowId===lastWindow||performance.now()<retryAt))return;
+ inFlight=true;controller=new AbortController();const deadline=setTimeout(()=>controller.abort(),10000);
  try{
-  const response=await fetch('https://raw.githubusercontent.com/grandchallenge/grandchallenge.github.io/control-public-feed/feed.json?window='+Math.floor(Date.now()/120000),{cache:'no-cache',signal:controller.signal,credentials:'omit',referrerPolicy:'no-referrer'});
+  const response=await fetch('https://raw.githubusercontent.com/grandchallenge/grandchallenge.github.io/control-public-feed/feed.json?window='+windowId,{cache:'no-cache',signal:controller.signal,credentials:'omit',referrerPolicy:'no-referrer'});
   if(!response.ok)throw Error('feed');
   const raw=await response.text();if(raw.length>100000)throw Error('size');
   const feed=JSON.parse(raw);
@@ -79,16 +83,20 @@ async function tick(){
    }else if(o.outcome==='failed'&&keys(o,['operation','outcome','detail'])&&o.detail==='Underlying diagnostic not disclosure-authorized'){event='failure';excerpt='Observed failure · diagnostic private'}else throw Error('outcome');
    records.push({utc:r.accepted_at,event:'request',run_id:r.id,message:JSON.stringify(r.request,null,2),excerpt:repo},{utc:r.finished_at,event,run_id:r.id,message:JSON.stringify(o,null,2),excerpt});
   }
-  if(paused)return;
+  if(paused||document.hidden)return;
+  if(lastUpdate&&Date.parse(feed.published_at)<Date.parse(lastUpdate))throw Error('older cached publication');
+  lastWindow=windowId;retryAt=0;failures=0;
+  if(raw===lastRaw){status('Feed reachable','published');return}
+  lastRaw=raw;
   const source=el('source');source.textContent='';const link=make('a','',repo);link.href='https://github.com/'+repo;
   source.append(link,make('span','',feed.records.length+' paired operations · '+feed.withheld_candidates+' withheld candidates in retained window · activated '+feed.activated_at+' · bounded history'));
   records.sort((a,b)=>a.utc.localeCompare(b.utc));
   all=prepare(records);const retained=new Set(all.map(r=>r.key));for(const k of opened)if(!retained.has(k))opened.delete(k);
   lastUpdate=feed.published_at;status('Feed reachable','published');metrics();render()
- }catch(e){if(!paused&&!document.hidden)status('Feed unavailable · retained display','stale')}finally{clearTimeout(deadline);controller=null;inFlight=false;if(!paused&&!document.hidden&&el('state').textContent==='Paused')tick()}
+ }catch(e){if(!paused&&!document.hidden){failures++;retryAt=performance.now()+Math.min(60000,5000*2**Math.min(failures-1,4));status('Feed unavailable · retained display','stale')}}finally{clearTimeout(deadline);controller=null;inFlight=false;if(!paused&&!document.hidden&&el('state').textContent==='Paused')tick(true)}
 }
 document.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{filter=b.dataset.filter;document.querySelectorAll('[data-filter]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));render()});
 el('search').addEventListener('input',()=>{if(follow)setFollow(false);render()});el('follow').onclick=()=>setFollow(!follow);
-el('pause').onclick=()=>{paused=!paused;el('pause').setAttribute('aria-pressed',String(paused));el('pause').textContent=paused?'Resume feed':'Pause feed';if(paused){controller?.abort();status('Paused','')}else tick()};
+el('pause').onclick=()=>{paused=!paused;el('pause').setAttribute('aria-pressed',String(paused));el('pause').textContent=paused?'Resume feed':'Pause feed';if(paused){controller?.abort();status('Paused','')}else tick(true)};
 let userScroll=false;for(const name of ['wheel','touchmove','pointerdown','keydown'])table.addEventListener(name,()=>{userScroll=true},{passive:true});table.addEventListener('scroll',()=>{if(userScroll&&follow&&table.scrollHeight-table.clientHeight-table.scrollTop>45)setFollow(false);userScroll=false},{passive:true});
-document.addEventListener('visibilitychange',()=>{if(document.hidden)controller?.abort();else tick()});tick();setInterval(tick,60000);
+document.addEventListener('visibilitychange',()=>{if(document.hidden)controller?.abort();else tick(true)});tick();setInterval(tick,5000);
