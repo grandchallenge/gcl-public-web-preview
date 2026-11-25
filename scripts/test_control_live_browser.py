@@ -41,6 +41,28 @@ try:
             expect(q.locator(".event")).to_have_count(7)
             for channel,n in [("request",4),("result",2),("failure",1)]:expect(q.locator("#count-"+channel)).to_have_text(str(n))
             expect(q.locator("#source")).to_contain_text("last activity")
+            # Late release of an actual-shaped reviewed transcript must update an already-open row.
+            q.locator("[data-filter=request]").click()
+            item=q.locator(".event").filter(has_text="run_bash").first
+            item.locator("summary").click()
+            expect(item.locator(".detail")).to_contain_text("not released")
+            transcript={"policy":"GCL_REVIEWED_RESEARCH_TRANSCRIPT/1","id":"a"*20,"repository":"grandchallenge/MATH-PROGRAMME","revision":"b"*40,"command":"lake env lean Proof.lean","stdout_stderr":"error: unsolved goals\n<script>literal text</script>\n[REDACTED:assignment]","redactions":{"command":{},"output":{"assignment":1}},"exit_code":0,"source_end":U}
+            payload[0]={**feed,"transcripts":[transcript]}
+            q.evaluate("tick(true)")
+            expect(q.locator(".event[open] .detail")).to_contain_text("lake env lean Proof.lean")
+            q.locator("[data-filter=result]").click()
+            item=q.locator(".event").filter(has_text="reviewed output")
+            item.locator("summary").click()
+            expect(item.locator(".detail")).to_contain_text("unsolved goals")
+            expect(item.locator(".detail")).to_contain_text("<script>literal text</script>")
+            assert item.locator(".detail script").count()==0
+            q.locator("[data-filter=all]").click()
+            q.evaluate("async () => { while(inFlight) await new Promise(r=>setTimeout(r,20)); }")
+            payload[0]=feed
+            q.evaluate("tick(true)")
+            q.evaluate("async () => { while(inFlight) await new Promise(r=>setTimeout(r,20)); }")
+            calls.clear();calls.append(URL)
+
             assert q.evaluate("document.documentElement.scrollWidth<=innerWidth")
             q.locator("[data-filter=failure]").click()
             q.locator(".event summary").click()

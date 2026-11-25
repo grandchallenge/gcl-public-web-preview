@@ -26,7 +26,7 @@ function fillDetails(d,r){
  for(const [k,v] of Object.entries(r.j))addField(d,k,v);
 }
 function makeRow(r){
- const n=make('details','event '+r.g+(r.error?' rpc-error':''));n.dataset.key=r.key;n.dataset.title=r.title;
+ const n=make('details','event '+r.g+(r.error?' rpc-error':''));n.dataset.key=r.key;n.dataset.title=r.title;n.dataset.fingerprint=recordKey(r);
  const summary=make('summary','event-summary'),time=make('span','time',stamp(r.utc)),stream=make('span','stream',({request:'ACCEPTED',result:'COMPLETED',failure:'FAILED'}[r.event])),text=make('span','summarytext'),size=make('span','size','');
  time.title=r.utc;text.append(make('b','',r.title),make('span','',r.excerpt));summary.append(time,stream,text,size);n.append(summary);
  const detail=make('div','detail');n.append(detail);const expand=()=>{if(n.open){opened.add(r.key);if(!detail.childNodes.length)fillDetails(detail,r)}else opened.delete(r.key)};
@@ -42,7 +42,7 @@ function render(){
   let cursor=log.firstChild;
   for(const r of visible){
    let n=nodes.get(r.key);
-   if(n&&n.dataset.title!==r.title){const was=n.open;if(n===cursor)cursor=n.nextSibling;n.remove();nodes.delete(r.key);if(was)opened.add(r.key);n=null}
+   if(n&&(n.dataset.title!==r.title||n.dataset.fingerprint!==recordKey(r))){const was=n.open;if(n===cursor)cursor=n.nextSibling;n.remove();nodes.delete(r.key);if(was)opened.add(r.key);n=null}
    if(!n){n=makeRow(r);nodes.set(r.key,n)}
    if(n===cursor)cursor=cursor.nextSibling;else log.insertBefore(n,cursor)
   }
@@ -113,9 +113,18 @@ async function tick(force=false){
   const date=v=>typeof v==='string'&&v.length<=40&&Number.isFinite(Date.parse(v));
   const ops=new Set(['run_bash','system_status','project_queue_audit','project_queue_reconcile','project_queue_views_readback','governed_repository_head','governed_repository_file','governed_repository_pr','governed_repository_document_proposal','external_github_merge_inspect','outbound_audit_health']);
   const targets=new Set(['CHAD Bash','CONTROL service','GCL Worker Queue #2','GCL saved views','unapproved-repository','grandchallenge-repository','grandchallenge/MATHSOLVE','grandchallenge/MATH-PROGRAMME','grandchallenge/ADAPTIVE-INTELLIGENCE-ATLAS','grandchallenge/COMPUTATIONAL-DIFFICULTY-ATLAS','grandchallenge/CONTROL']);
-  if(!keys(feed,['schema','policy','coverage','epoch','epoch_started_at','epoch_reason','published_at','records','withheld_candidates','retention_limit'])||feed.schema!=='GCL_CONTROL_ACTIVITY_FEED/2'||feed.policy!=='GCL_CONTROL_PUBLIC_LIFECYCLE/2'||feed.coverage!=='authorized_control_lifecycle_only'||!Number.isInteger(feed.epoch)||feed.epoch<1||!date(feed.epoch_started_at)||!['activation','source_gap','index_reset'].includes(feed.epoch_reason)||!date(feed.published_at)||Date.parse(feed.published_at)<Date.parse(feed.epoch_started_at)||!Array.isArray(feed.records)||feed.records.length>48||feed.retention_limit!==48||!Number.isInteger(feed.withheld_candidates)||feed.withheld_candidates<0||feed.withheld_candidates>48)throw Error('schema');
+  if(!keys(feed,['schema','policy','coverage','epoch','epoch_started_at','epoch_reason','published_at','records','withheld_candidates','retention_limit',...(Object.hasOwn(feed,'transcripts')?['transcripts']:[])])||feed.schema!=='GCL_CONTROL_ACTIVITY_FEED/2'||feed.policy!=='GCL_CONTROL_PUBLIC_LIFECYCLE/2'||feed.coverage!=='authorized_control_lifecycle_only'||!Number.isInteger(feed.epoch)||feed.epoch<1||!date(feed.epoch_started_at)||!['activation','source_gap','index_reset'].includes(feed.epoch_reason)||!date(feed.published_at)||Date.parse(feed.published_at)<Date.parse(feed.epoch_started_at)||!Array.isArray(feed.records)||feed.records.length>48||feed.retention_limit!==48||!Number.isInteger(feed.withheld_candidates)||feed.withheld_candidates<0||feed.withheld_candidates>48)throw Error('schema');
   if(feed.epoch<lastEpoch){lastWindow=windowId;freshness();return}
   if(feed.epoch===lastEpoch&&lastEpochStart!==null&&feed.epoch_started_at!==lastEpochStart)throw Error('epoch identity');
+  const transcripts=new Map(),researchRepos=new Set(['grandchallenge/MATH-PROGRAMME','grandchallenge/MATHSOLVE','grandchallenge/ADAPTIVE-INTELLIGENCE-ATLAS','grandchallenge/COMPUTATIONAL-DIFFICULTY-ATLAS']);
+  const counts=v=>v&&typeof v==='object'&&!Array.isArray(v)&&Object.entries(v).every(([k,n])=>/^[a-z_]{1,32}$/.test(k)&&Number.isInteger(n)&&n>0&&n<=16000);
+  if(Object.hasOwn(feed,'transcripts')){
+   if(!Array.isArray(feed.transcripts)||feed.transcripts.length>48)throw Error('transcripts');
+   for(const t of feed.transcripts){
+    if(!keys(t,['policy','id','repository','revision','command','stdout_stderr','redactions','exit_code','source_end'])||t.policy!=='GCL_REVIEWED_RESEARCH_TRANSCRIPT/1'||typeof t.id!=='string'||!/^[0-9a-f]{20}$/.test(t.id)||transcripts.has(t.id)||!researchRepos.has(t.repository)||typeof t.revision!=='string'||!/^[0-9a-f]{40}$/.test(t.revision)||typeof t.command!=='string'||!t.command||t.command.length>16000||typeof t.stdout_stderr!=='string'||t.stdout_stderr.length>16000||!keys(t.redactions,['command','output'])||!counts(t.redactions.command)||!counts(t.redactions.output)||!date(t.source_end)||!Number.isInteger(t.exit_code))throw Error('transcript');
+    transcripts.set(t.id,t)
+   }
+  }
   const records=[],seen=new Set();
   let latest=null;
   for(const r of feed.records){
@@ -124,15 +133,19 @@ async function tick(force=false){
    if(r.outcome==='accepted'){
     if(r.finished_at!==null||r.exit_code!==null)throw Error('pending');
    }else if(!['completed','failed'].includes(r.outcome)||!date(r.finished_at)||Date.parse(r.finished_at)<Date.parse(r.accepted_at)||Date.parse(r.finished_at)>Date.parse(feed.published_at)||!Number.isInteger(r.exit_code)||r.exit_code< -255||r.exit_code>255||(r.outcome==='completed')!==(r.exit_code===0))throw Error('outcome');
-   const message=JSON.stringify({operation:r.operation,target:r.target,phase:'accepted',payload:'Private command/arguments not authorized for disclosure'},null,2);
-   records.push({utc:r.accepted_at,event:'request',run_id:r.id,operation:r.operation,message,excerpt:r.target+' · accepted'});
+   const t=transcripts.get(r.id);
+   if(t&&(r.operation!=='run_bash'||r.finished_at===null||r.exit_code!==t.exit_code||Date.parse(t.source_end)<Date.parse(r.accepted_at)||Date.parse(t.source_end)>Date.parse(r.finished_at)))throw Error('transcript correlation');
+   const provenance=t?{repository:t.repository,revision:t.revision,release:'Reviewed research transcript; local execution'}:{};
+   const message=JSON.stringify({operation:r.operation,target:r.target,phase:'accepted',...provenance,...(t?{bash_command:t.command,redactions:t.redactions.command}:{payload:'Research transcript not released for this operation'})},null,2);
+   records.push({utc:r.accepted_at,event:'request',run_id:r.id,operation:r.operation,message,excerpt:t?t.repository+' · '+t.command.replace(/\s+/g,' ').slice(0,160):r.target+' · accepted'});
    if(r.finished_at!==null){
     const duration=Math.round((Date.parse(r.finished_at)-Date.parse(r.accepted_at))/100)/10;
-    const out={operation:r.operation,target:r.target,outcome:r.outcome,exit_code:r.exit_code,duration_seconds:duration,payload:'Private result/diagnostic text not authorized for disclosure'};
-    records.push({utc:r.finished_at,event:r.outcome==='completed'?'result':'failure',run_id:r.id,operation:r.operation,message:JSON.stringify(out,null,2),excerpt:r.target+' · exit '+r.exit_code+' · '+duration+'s'});
+    const out={operation:r.operation,target:r.target,outcome:r.outcome,exit_code:r.exit_code,duration_seconds:duration,...provenance,...(t?{stdout_stderr:t.stdout_stderr,redactions:t.redactions.output}:{payload:'Research transcript not released for this operation'})};
+    records.push({utc:r.finished_at,event:r.outcome==='completed'?'result':'failure',run_id:r.id,operation:r.operation,message:JSON.stringify(out,null,2),excerpt:(t?t.repository+' · reviewed output':r.target)+' · exit '+r.exit_code+' · '+duration+'s'});
    }
    const last=r.finished_at||r.accepted_at;if(latest===null||Date.parse(last)>Date.parse(latest))latest=last;
   }
+  if([...transcripts.keys()].some(id=>!seen.has(id)))throw Error('orphan transcript');
   if(paused||document.hidden)return;
   if(lastUpdate&&Date.parse(feed.published_at)<Date.parse(lastUpdate)){lastWindow=windowId;retryAt=0;failures=0;freshness();return}
   lastWindow=windowId;retryAt=0;failures=0;lastEpoch=feed.epoch;lastEpochStart=feed.epoch_started_at;
@@ -140,7 +153,7 @@ async function tick(force=false){
   if(raw===lastRaw)return;
   lastRaw=raw;
   const source=el('source');source.textContent='';
-  source.append(make('span','',feed.records.length+' operations · '+feed.withheld_candidates+' incomplete/invalid candidates withheld · last activity '+(latest||'none in this epoch')));
+  source.append(make('span','',feed.records.length+' operations · '+transcripts.size+' reviewed research transcripts · '+feed.withheld_candidates+' incomplete/invalid candidates withheld · last activity '+(latest||'none in this epoch')));
   source.append(make('span','','Epoch '+feed.epoch+' · '+feed.epoch_started_at+' · '+(feed.epoch_reason==='activation'?'new coverage; earlier history not included':'source discontinuity; resumed from new boundary, missing history not reconstructed')));
   records.sort((a,b)=>a.utc.localeCompare(b.utc));
   all=prepare(records);const retained=new Set(all.map(r=>r.key));for(const k of opened)if(!retained.has(k))opened.delete(k);
