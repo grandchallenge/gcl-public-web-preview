@@ -56,6 +56,12 @@ try:
             expect(item.locator(".detail")).to_contain_text("unsolved goals")
             expect(item.locator(".detail")).to_contain_text("<script>literal text</script>")
             assert item.locator(".detail script").count()==0
+            q.evaluate("async () => { while(inFlight) await new Promise(r=>setTimeout(r,20)); }")
+            payload[0]={**feed,"transcripts":[{**transcript,"policy":"GCL_AUTOMATIC_PUBLIC_SOURCE_TRANSCRIPT/1"}]}
+            q.evaluate("tick(true)")
+            expect(q.locator("#source")).to_contain_text("1 automatic")
+            expect(q.locator(".event[open] .detail")).to_contain_text("Automatic exact public-source verification")
+
             q.locator("[data-filter=all]").click()
             q.evaluate("async () => { while(inFlight) await new Promise(r=>setTimeout(r,20)); }")
             payload[0]=feed
