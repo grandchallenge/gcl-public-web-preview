@@ -18,7 +18,7 @@ function prepare(records){
 }
 function addField(parent,name,val){
  const row=make('div','field'),body=make('div','field-value');let value=val;
- if(typeof val==='string'){const nested=parse(val);if(nested&&typeof nested==='object')value=nested}
+ if(typeof val==='string'&&!['stdout','stderr','bash_command','stdout_stderr'].includes(name)){const nested=parse(val);if(nested&&typeof nested==='object')value=nested}
  if(value&&typeof value==='object'&&!Array.isArray(value)&&typeof value.stdout_stderr==='string'){body.append(make('pre','',value.stdout_stderr));const meta=make('details','aux');const rest={...value};delete rest.stdout_stderr;meta.append(make('summary','','Execution metadata'),make('pre','',JSON.stringify(rest,null,2)));body.append(meta)}else body.append(make('pre','',typeof value==='string'?value:JSON.stringify(value,null,2)??String(value)));row.append(make('div','field-name',name),body);parent.append(row)
 }
 function fillDetails(d,r){
@@ -34,7 +34,7 @@ function makeRow(r){
 }
 function setFollow(v){follow=v;el('follow').setAttribute('aria-pressed',String(v));el('follow').textContent=v?'Following latest':'Follow latest';if(v)table.scrollTop=table.scrollHeight}
 function render(){
- const q=el('search').value.trim().toLowerCase(),visible=all.filter(r=>(filter==='all'||r.g===filter)&&(!q||(r.message+' '+r.title+' '+r.event).toLowerCase().includes(q)));
+ const q=el('search').value.trim().toLowerCase(),visible=all.filter(r=>(filter==='all'||(filter==='research'&&r.j.release)||r.g===filter)&&(!q||(r.message+' '+r.title+' '+r.event).toLowerCase().includes(q)));
  const oldTop=table.scrollTop,before=[...log.children].find(n=>n.offsetTop+n.offsetHeight>=oldTop),anchor=before?.dataset.key,offset=before?before.offsetTop-oldTop:0;
  const wanted=new Set(visible.map(r=>r.key));for(const [k,n] of nodes)if(!wanted.has(k)){n.remove();nodes.delete(k)}
  if(!visible.length){if(!log.querySelector('.empty'))log.append(make('div','empty','No matching authorized records.'))}else{
@@ -121,7 +121,11 @@ async function tick(force=false){
   if(Object.hasOwn(feed,'transcripts')){
    if(!Array.isArray(feed.transcripts)||feed.transcripts.length>48)throw Error('transcripts');
    for(const t of feed.transcripts){
-    if(!keys(t,['policy','id','repository','revision','command','stdout_stderr','redactions','exit_code','source_end'])||!['GCL_REVIEWED_RESEARCH_TRANSCRIPT/1','GCL_AUTOMATIC_PUBLIC_SOURCE_TRANSCRIPT/1'].includes(t.policy)||typeof t.id!=='string'||!/^[0-9a-f]{20}$/.test(t.id)||transcripts.has(t.id)||!researchRepos.has(t.repository)||typeof t.revision!=='string'||!/^[0-9a-f]{40}$/.test(t.revision)||typeof t.command!=='string'||!t.command||t.command.length>16000||typeof t.stdout_stderr!=='string'||t.stdout_stderr.length>16000||!keys(t.redactions,['command','output'])||!counts(t.redactions.command)||!counts(t.redactions.output)||!date(t.source_end)||!Number.isInteger(t.exit_code))throw Error('transcript');
+    if(!keys(t,['policy','id','repository','revision','command','stdout_stderr','redactions','exit_code','source_end'])||!['GCL_REVIEWED_RESEARCH_TRANSCRIPT/1','GCL_AUTOMATIC_PUBLIC_SOURCE_TRANSCRIPT/1','GCL_OPEN_RESEARCH_EXECUTION/1'].includes(t.policy)||typeof t.id!=='string'||!/^[0-9a-f]{20}$/.test(t.id)||transcripts.has(t.id)||!researchRepos.has(t.repository)||typeof t.revision!=='string'||!/^[0-9a-f]{40}$/.test(t.revision)||typeof t.command!=='string'||!t.command||t.command.length>16000||typeof t.stdout_stderr!=='string'||t.stdout_stderr.length>16000||!keys(t.redactions,['command','output'])||!counts(t.redactions.command)||!counts(t.redactions.output)||!date(t.source_end)||!Number.isInteger(t.exit_code))throw Error('transcript');
+    if(t.policy==='GCL_OPEN_RESEARCH_EXECUTION/1'){
+     const streams=parse(t.stdout_stderr);
+     if(!keys(streams,['stdout','stderr'])||typeof streams.stdout!=='string'||typeof streams.stderr!=='string')throw Error('research streams')
+    }
     transcripts.set(t.id,t)
    }
   }
@@ -135,13 +139,13 @@ async function tick(force=false){
    }else if(!['completed','failed'].includes(r.outcome)||!date(r.finished_at)||Date.parse(r.finished_at)<Date.parse(r.accepted_at)||Date.parse(r.finished_at)>Date.parse(feed.published_at)||!Number.isInteger(r.exit_code)||r.exit_code< -255||r.exit_code>255||(r.outcome==='completed')!==(r.exit_code===0))throw Error('outcome');
    const t=transcripts.get(r.id);
    if(t&&(r.operation!=='run_bash'||r.finished_at===null||r.exit_code!==t.exit_code||Date.parse(t.source_end)<Date.parse(r.accepted_at)||Date.parse(t.source_end)>Date.parse(r.finished_at)))throw Error('transcript correlation');
-   const provenance=t?{repository:t.repository,revision:t.revision,release:t.policy==='GCL_AUTOMATIC_PUBLIC_SOURCE_TRANSCRIPT/1'?'Automatic exact public-source verification; local execution':'Reviewed research transcript; local execution'}:{};
+   const provenance=t?{repository:t.repository,revision:t.revision,release:t.policy==='GCL_OPEN_RESEARCH_EXECUTION/1'?'Open research execution; isolated source-authorized run':t.policy==='GCL_AUTOMATIC_PUBLIC_SOURCE_TRANSCRIPT/1'?'Automatic exact public-source verification; local execution':'Reviewed research transcript; local execution'}:{};
    const message=JSON.stringify({operation:r.operation,target:r.target,phase:'accepted',...provenance,...(t?{bash_command:t.command,redactions:t.redactions.command}:{payload:'Research transcript not released for this operation'})},null,2);
    records.push({utc:r.accepted_at,event:'request',run_id:r.id,operation:r.operation,message,excerpt:t?t.repository+' · '+t.command.replace(/\s+/g,' ').slice(0,160):r.target+' · accepted'});
    if(r.finished_at!==null){
     const duration=Math.round((Date.parse(r.finished_at)-Date.parse(r.accepted_at))/100)/10;
-    const out={operation:r.operation,target:r.target,outcome:r.outcome,exit_code:r.exit_code,duration_seconds:duration,...provenance,...(t?{stdout_stderr:t.stdout_stderr,redactions:t.redactions.output}:{payload:'Research transcript not released for this operation'})};
-    records.push({utc:r.finished_at,event:r.outcome==='completed'?'result':'failure',run_id:r.id,operation:r.operation,message:JSON.stringify(out,null,2),excerpt:(t?t.repository+' · '+(t.policy==='GCL_AUTOMATIC_PUBLIC_SOURCE_TRANSCRIPT/1'?'verified public-source output':'reviewed output'):r.target)+' · exit '+r.exit_code+' · '+duration+'s'});
+    const out={operation:r.operation,target:r.target,outcome:r.outcome,exit_code:r.exit_code,duration_seconds:duration,...provenance,...(t?{...(t.policy==='GCL_OPEN_RESEARCH_EXECUTION/1'?parse(t.stdout_stderr):{stdout_stderr:t.stdout_stderr}),redactions:t.redactions.output}:{payload:'Research transcript not released for this operation'})};
+    records.push({utc:r.finished_at,event:r.outcome==='completed'?'result':'failure',run_id:r.id,operation:r.operation,message:JSON.stringify(out,null,2),excerpt:(t?t.repository+' · '+(t.policy==='GCL_OPEN_RESEARCH_EXECUTION/1'?'research execution output':t.policy==='GCL_AUTOMATIC_PUBLIC_SOURCE_TRANSCRIPT/1'?'verified public-source output':'reviewed output'):r.target)+' · exit '+r.exit_code+' · '+duration+'s'});
    }
    const last=r.finished_at||r.accepted_at;if(latest===null||Date.parse(last)>Date.parse(latest))latest=last;
   }
@@ -153,7 +157,7 @@ async function tick(force=false){
   if(raw===lastRaw)return;
   lastRaw=raw;
   const source=el('source');source.textContent='';
-  source.append(make('span','',feed.records.length+' operations · '+transcripts.size+' research transcripts ('+[...transcripts.values()].filter(t=>t.policy==='GCL_AUTOMATIC_PUBLIC_SOURCE_TRANSCRIPT/1').length+' automatic)'+' · '+feed.withheld_candidates+' incomplete/invalid candidates withheld · last activity '+(latest||'none in this epoch')));
+  source.append(make('span','',feed.records.length+' operations · '+transcripts.size+' research transcripts ('+[...transcripts.values()].filter(t=>t.policy!=='GCL_REVIEWED_RESEARCH_TRANSCRIPT/1').length+' automatic)'+' · '+feed.withheld_candidates+' incomplete/invalid candidates withheld · last activity '+(latest||'none in this epoch')));
   source.append(make('span','','Epoch '+feed.epoch+' · '+feed.epoch_started_at+' · '+(feed.epoch_reason==='activation'?'new coverage; earlier history not included':'source discontinuity; resumed from new boundary, missing history not reconstructed')));
   records.sort((a,b)=>a.utc.localeCompare(b.utc));
   all=prepare(records);const retained=new Set(all.map(r=>r.key));for(const k of opened)if(!retained.has(k))opened.delete(k);

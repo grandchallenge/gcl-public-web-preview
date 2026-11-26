@@ -1,5 +1,5 @@
 """Actual Chromium verification; synthetic feed fixtures are never published."""
-import functools,http.server,pathlib,threading
+import functools,http.server,pathlib,threading,json
 from datetime import datetime,timezone
 from playwright.sync_api import sync_playwright,expect
 ROOT=pathlib.Path(__file__).resolve().parents[1]
@@ -61,6 +61,15 @@ try:
             q.evaluate("tick(true)")
             expect(q.locator("#source")).to_contain_text("1 automatic")
             expect(q.locator(".event[open] .detail")).to_contain_text("Automatic exact public-source verification")
+            q.evaluate("async () => { while(inFlight) await new Promise(r=>setTimeout(r,20)); }")
+            payload[0]={**feed,"transcripts":[{**transcript,"policy":"GCL_OPEN_RESEARCH_EXECUTION/1","stdout_stderr":json.dumps({"stdout":"computed 42\n","stderr":"proof diagnostic\n"})}]}
+            q.evaluate("tick(true)")
+            expect(q.locator(".event[open] .detail")).to_contain_text("Open research execution")
+            expect(q.locator(".event[open] .detail")).to_contain_text("computed 42")
+            expect(q.locator(".event[open] .detail")).to_contain_text("proof diagnostic")
+            q.locator("[data-filter=research]").click()
+            expect(q.locator(".event")).to_have_count(2)
+
 
             q.locator("[data-filter=all]").click()
             q.evaluate("async () => { while(inFlight) await new Promise(r=>setTimeout(r,20)); }")
