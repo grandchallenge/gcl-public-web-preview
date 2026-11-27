@@ -70,6 +70,11 @@ try:
             expect(q.locator(".event[open] .detail")).to_contain_text("Open research execution")
             expect(q.locator(".event[open] .detail")).to_contain_text("computed 42")
             expect(q.locator(".event[open] .detail")).to_contain_text("proof diagnostic")
+            q.evaluate("async () => { while(inFlight) await new Promise(r=>setTimeout(r,20)); }")
+            payload[0]={**feed,"transcripts":[{**transcript,"policy":"GCL_NATIVE_PUBLIC_RESEARCH/1","command":"# GCL_PUBLIC_RESEARCH grandchallenge/MATH-PROGRAMME "+"b"*40+"\nlake env lean Proof.lean","stdout_stderr":"Proof.lean:17:3: unsolved goals\nsecret = 17\n","redactions":{"command":{},"output":{}}}]}
+            q.evaluate("tick(true)")
+            expect(q.locator(".event[open] .detail")).to_contain_text("actual ordinary Bash execution")
+            expect(q.locator(".event[open] .detail")).to_contain_text("secret = 17")
             q.locator("[data-filter=research]").click()
             expect(q.locator(".event")).to_have_count(2)
 
