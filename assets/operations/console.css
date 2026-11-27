@@ -14,7 +14,7 @@ header h1{font-size:25px;margin:5px 0 4px}.subtitle{font-size:11px}.connection{d
 .metrics{padding-block:7px}.metric{padding-inline:7px}.metric-label{display:flex;flex-direction:column;align-items:flex-start;gap:2px;font-size:10px}.metric strong{font-size:18px;line-height:1.1}.series{height:12px;margin-top:5px}
 .scale{font-size:9px}.scale span:nth-child(2){display:none}
 .toolbar{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:6px;padding:9px 0 7px}
-.filters{grid-column:1/-1;gap:1px;flex-wrap:nowrap}.filters button,.control{font-size:10.5px;padding:5px 6px}.search{min-width:0;width:100%;padding:3px 0;gap:3px}.search input{font-size:11px}.search span{display:none}
+.filters{grid-column:1/-1;gap:1px;flex-wrap:wrap}.filters button,.control{font-size:10.5px;padding:5px 6px}.search{min-width:0;width:100%;padding:3px 0;gap:3px}.search input{font-size:11px}.search span{display:none}
 .meta-line{gap:3px;padding-bottom:6px;font-size:10px}.meta-line span:nth-child(2){font-size:10px}
 .table{height:max(270px,calc(100dvh - 285px))}
 .columns{display:flex;gap:9px;font-size:9px;padding:5px 8px}.columns span:nth-child(3){margin-left:auto}
