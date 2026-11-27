@@ -71,6 +71,26 @@ try:
             expect(q.locator(".event")).to_have_count(2)
 
 
+            q.evaluate("async () => { while(inFlight) await new Promise(r=>setTimeout(r,20)); }")
+            evidence={"policy":"GCL_PUBLIC_REPOSITORY_EVIDENCE/1","id":"e"*20,"repository":"grandchallenge/MATH-PROGRAMME","revision":"c"*40,"path":"research/actual_stdout.txt","committed_at":T,"observed_at":U,"source_sha256":"d"*64,"blob_sha":"e"*40,"start_line":1,"end_line":2,"total_lines":3,"excerpt":"theorem result verified\n<script>literal source</script>","redactions":{}}
+            payload[0]={**payload[0],"repository_evidence":[evidence]}
+            q.evaluate("tick(true)")
+            expect(q.locator("#source")).to_contain_text("1 public research artifacts")
+            expect(q.locator(".event")).to_have_count(3)
+            item=q.locator(".event.evidence")
+            item.locator("summary").click()
+            expect(item.locator(".detail")).to_contain_text("theorem result verified")
+            expect(item.locator(".detail")).to_contain_text("not a local execution transcript")
+            assert item.locator(".detail script").count()==0
+            expect(item.locator("a")).to_have_attribute("href","https://github.com/grandchallenge/MATH-PROGRAMME/blob/"+"c"*40+"/research/actual_stdout.txt#L1-L2")
+            expect(q.locator("#count-result")).to_have_text("2")
+            q.locator("[data-filter=evidence]").click()
+            expect(q.locator(".event")).to_have_count(1)
+            q.evaluate("async () => { while(inFlight) await new Promise(r=>setTimeout(r,20)); }")
+            payload[0]={**payload[0],"repository_evidence":[{**evidence,"path":"research/../private.txt"}]}
+            q.evaluate("tick(true)")
+            expect(q.locator("#state")).to_contain_text("unavailable")
+            assert "private.txt" not in q.locator("body").inner_text()
             q.locator("[data-filter=all]").click()
             q.evaluate("async () => { while(inFlight) await new Promise(r=>setTimeout(r,20)); }")
             payload[0]=feed

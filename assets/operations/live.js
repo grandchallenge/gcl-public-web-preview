@@ -18,16 +18,21 @@ function prepare(records){
 }
 function addField(parent,name,val){
  const row=make('div','field'),body=make('div','field-value');let value=val;
- if(typeof val==='string'&&!['stdout','stderr','bash_command','stdout_stderr'].includes(name)){const nested=parse(val);if(nested&&typeof nested==='object')value=nested}
+ if(typeof val==='string'&&!['stdout','stderr','bash_command','stdout_stderr','source_excerpt'].includes(name)){const nested=parse(val);if(nested&&typeof nested==='object')value=nested}
  if(value&&typeof value==='object'&&!Array.isArray(value)&&typeof value.stdout_stderr==='string'){body.append(make('pre','',value.stdout_stderr));const meta=make('details','aux');const rest={...value};delete rest.stdout_stderr;meta.append(make('summary','','Execution metadata'),make('pre','',JSON.stringify(rest,null,2)));body.append(meta)}else body.append(make('pre','',typeof value==='string'?value:JSON.stringify(value,null,2)??String(value)));row.append(make('div','field-name',name),body);parent.append(row)
 }
 function fillDetails(d,r){
  d.append(make('div','detail-heading',r.utc+' · '+r.event.toUpperCase()+' · authorized projection'));
  for(const [k,v] of Object.entries(r.j))addField(d,k,v);
+ if(r.event==='evidence'){
+  const a=make('a','','Read exact public source');
+  a.href='https://github.com/'+r.j.repository+'/blob/'+r.j.revision+'/'+r.j.path+'#L'+r.j.start_line+'-L'+r.j.end_line;
+  a.rel='noopener noreferrer';a.target='_blank';d.append(a);
+ }
 }
 function makeRow(r){
  const n=make('details','event '+r.g+(r.error?' rpc-error':''));n.dataset.key=r.key;n.dataset.title=r.title;n.dataset.fingerprint=recordKey(r);
- const summary=make('summary','event-summary'),time=make('span','time',stamp(r.utc)),stream=make('span','stream',({request:'ACCEPTED',result:'COMPLETED',failure:'FAILED'}[r.event])),text=make('span','summarytext'),size=make('span','size','');
+ const summary=make('summary','event-summary'),time=make('span','time',stamp(r.utc)),stream=make('span','stream',({request:'ACCEPTED',result:'COMPLETED',failure:'FAILED',evidence:'SOURCE'}[r.event])),text=make('span','summarytext'),size=make('span','size','');
  time.title=r.utc;text.append(make('b','',r.title),make('span','',r.excerpt));summary.append(time,stream,text,size);n.append(summary);
  const detail=make('div','detail');n.append(detail);const expand=()=>{if(n.open){opened.add(r.key);if(!detail.childNodes.length)fillDetails(detail,r)}else opened.delete(r.key)};
  summary.addEventListener('click',()=>{if(!n.open&&follow)setFollow(false)});n.addEventListener('toggle',expand);if(opened.has(r.key)){n.open=true;expand()}return n
@@ -53,7 +58,7 @@ function render(){
 function metrics(){
  const valid=all.map(r=>+new Date(r.utc)).filter(Number.isFinite),lo=valid.length?Math.min(...valid):0,hi=valid.length?Math.max(...valid):0;
  const bins=24,counts=Object.fromEntries(channels.map(c=>[c,Array(bins).fill(0)]));let max=1;
- for(const r of all){const t=+new Date(r.utc);if(!Number.isFinite(t))continue;const i=Math.min(bins-1,Math.max(0,Math.floor((t-lo)/Math.max(1,hi-lo)*bins)));max=Math.max(max,++counts[r.g][i])}
+ for(const r of all){const t=+new Date(r.utc);if(!Number.isFinite(t)||!channels.includes(r.g))continue;const i=Math.min(bins-1,Math.max(0,Math.floor((t-lo)/Math.max(1,hi-lo)*bins)));max=Math.max(max,++counts[r.g][i])}
  for(const c of channels){el('count-'+c).textContent=all.filter(r=>r.g===c).length;el('series-'+c).replaceChildren(...counts[c].map(n=>{const b=make('i');b.style.height=n/max*100+'%';b.title=n+' records in time bin';return b}))}
  el('range-start').textContent=valid.length?shortTime(lo):'—';el('range-end').textContent=valid.length?shortTime(hi):'—'
 }
@@ -113,7 +118,7 @@ async function tick(force=false){
   const date=v=>typeof v==='string'&&v.length<=40&&Number.isFinite(Date.parse(v));
   const ops=new Set(['run_bash','system_status','project_queue_audit','project_queue_reconcile','project_queue_views_readback','governed_repository_head','governed_repository_file','governed_repository_pr','governed_repository_document_proposal','external_github_merge_inspect','outbound_audit_health']);
   const targets=new Set(['CHAD Bash','CONTROL service','GCL Worker Queue #2','GCL saved views','unapproved-repository','grandchallenge-repository','grandchallenge/MATHSOLVE','grandchallenge/MATH-PROGRAMME','grandchallenge/ADAPTIVE-INTELLIGENCE-ATLAS','grandchallenge/COMPUTATIONAL-DIFFICULTY-ATLAS','grandchallenge/CONTROL']);
-  if(!keys(feed,['schema','policy','coverage','epoch','epoch_started_at','epoch_reason','published_at','records','withheld_candidates','retention_limit',...(Object.hasOwn(feed,'transcripts')?['transcripts']:[])])||feed.schema!=='GCL_CONTROL_ACTIVITY_FEED/2'||feed.policy!=='GCL_CONTROL_PUBLIC_LIFECYCLE/2'||feed.coverage!=='authorized_control_lifecycle_only'||!Number.isInteger(feed.epoch)||feed.epoch<1||!date(feed.epoch_started_at)||!['activation','source_gap','index_reset'].includes(feed.epoch_reason)||!date(feed.published_at)||Date.parse(feed.published_at)<Date.parse(feed.epoch_started_at)||!Array.isArray(feed.records)||feed.records.length>48||feed.retention_limit!==48||!Number.isInteger(feed.withheld_candidates)||feed.withheld_candidates<0||feed.withheld_candidates>48)throw Error('schema');
+  if(!keys(feed,['schema','policy','coverage','epoch','epoch_started_at','epoch_reason','published_at','records','withheld_candidates','retention_limit',...(Object.hasOwn(feed,'transcripts')?['transcripts']:[]),...(Object.hasOwn(feed,'repository_evidence')?['repository_evidence']:[])])||feed.schema!=='GCL_CONTROL_ACTIVITY_FEED/2'||feed.policy!=='GCL_CONTROL_PUBLIC_LIFECYCLE/2'||feed.coverage!=='authorized_control_lifecycle_only'||!Number.isInteger(feed.epoch)||feed.epoch<1||!date(feed.epoch_started_at)||!['activation','source_gap','index_reset'].includes(feed.epoch_reason)||!date(feed.published_at)||Date.parse(feed.published_at)<Date.parse(feed.epoch_started_at)||!Array.isArray(feed.records)||feed.records.length>48||feed.retention_limit!==48||!Number.isInteger(feed.withheld_candidates)||feed.withheld_candidates<0||feed.withheld_candidates>48)throw Error('schema');
   if(feed.epoch<lastEpoch){lastWindow=windowId;freshness();return}
   if(feed.epoch===lastEpoch&&lastEpochStart!==null&&feed.epoch_started_at!==lastEpochStart)throw Error('epoch identity');
   const transcripts=new Map(),researchRepos=new Set(['grandchallenge/MATH-PROGRAMME','grandchallenge/MATHSOLVE','grandchallenge/ADAPTIVE-INTELLIGENCE-ATLAS','grandchallenge/COMPUTATIONAL-DIFFICULTY-ATLAS']);
@@ -150,6 +155,25 @@ async function tick(force=false){
    const last=r.finished_at||r.accepted_at;if(latest===null||Date.parse(last)>Date.parse(latest))latest=last;
   }
   if([...transcripts.keys()].some(id=>!seen.has(id)))throw Error('orphan transcript');
+  const evidence=feed.repository_evidence??[],evidenceIds=new Set(),researchRoots={
+   'grandchallenge/MATH-PROGRAMME':['campaigns/','research/','evidence/','docs/domains/','governance/erdos_proof_verification/evidence/'],
+   'grandchallenge/MATHSOLVE':['research/','MathSolve/','evidence/','certificates/'],
+   'grandchallenge/ADAPTIVE-INTELLIGENCE-ATLAS':['mathematics/','manuscript/','experiments/','releases/'],
+   'grandchallenge/COMPUTATIONAL-DIFFICULTY-ATLAS':['chapters/','architecture/']};
+  if(!Array.isArray(evidence)||evidence.length>8)throw Error('repository evidence');
+  for(const r of evidence){
+   if(!keys(r,['policy','id','repository','revision','path','committed_at','observed_at','source_sha256','blob_sha','start_line','end_line','total_lines','excerpt','redactions'])||
+      r.policy!=='GCL_PUBLIC_REPOSITORY_EVIDENCE/1'||typeof r.id!=='string'||!/^[a-f0-9]{20}$/.test(r.id)||seen.has(r.id)||evidenceIds.has(r.id)||
+      !researchRepos.has(r.repository)||typeof r.revision!=='string'||!/^[a-f0-9]{40}$/.test(r.revision)||
+      typeof r.path!=='string'||!/^[A-Za-z0-9_-][A-Za-z0-9_./-]{0,240}$/.test(r.path)||r.path.split('/').some(x=>!x||x.startsWith('.'))||!researchRoots[r.repository].some(x=>r.path.startsWith(x))||!/[.](md|lean|py|txt|json|tex)$/.test(r.path)||
+      !date(r.committed_at)||!date(r.observed_at)||Date.parse(r.observed_at)>Date.parse(feed.published_at)||Date.parse(r.committed_at)>Date.parse(r.observed_at)+300000||
+      typeof r.source_sha256!=='string'||!/^[a-f0-9]{64}$/.test(r.source_sha256)||typeof r.blob_sha!=='string'||!/^[a-f0-9]{40}$/.test(r.blob_sha)||
+      ![r.start_line,r.end_line,r.total_lines].every(Number.isInteger)||r.start_line<1||r.start_line>r.end_line||r.end_line>r.total_lines||
+      typeof r.excerpt!=='string'||!r.excerpt.trim()||r.excerpt.length>1800||!counts(r.redactions))throw Error('public source record');
+   evidenceIds.add(r.id);
+   const body={release:'Committed public repository evidence; source excerpt, not a local execution transcript or certification',source_excerpt:r.excerpt,repository:r.repository,revision:r.revision,path:r.path,committed_at:r.committed_at,observed_at:r.observed_at,start_line:r.start_line,end_line:r.end_line,total_lines:r.total_lines,source_sha256:r.source_sha256,blob_sha:r.blob_sha,redactions:r.redactions};
+   records.push({utc:r.observed_at,event:'evidence',run_id:r.id,operation:'Public research evidence',message:JSON.stringify(body,null,2),excerpt:r.repository+' · '+r.path+' · lines '+r.start_line+'–'+r.end_line+' of '+r.total_lines});
+  }
   if(paused||document.hidden)return;
   if(lastUpdate&&Date.parse(feed.published_at)<Date.parse(lastUpdate)){lastWindow=windowId;retryAt=0;failures=0;freshness();return}
   lastWindow=windowId;retryAt=0;failures=0;lastEpoch=feed.epoch;lastEpochStart=feed.epoch_started_at;
@@ -157,7 +181,7 @@ async function tick(force=false){
   if(raw===lastRaw)return;
   lastRaw=raw;
   const source=el('source');source.textContent='';
-  source.append(make('span','',feed.records.length+' operations · '+transcripts.size+' research transcripts ('+[...transcripts.values()].filter(t=>t.policy!=='GCL_REVIEWED_RESEARCH_TRANSCRIPT/1').length+' automatic)'+' · '+feed.withheld_candidates+' incomplete/invalid candidates withheld · last activity '+(latest||'none in this epoch')));
+  source.append(make('span','',feed.records.length+' operations · '+transcripts.size+' research transcripts ('+[...transcripts.values()].filter(t=>t.policy!=='GCL_REVIEWED_RESEARCH_TRANSCRIPT/1').length+' automatic)'+' · '+evidence.length+' public research artifacts · '+feed.withheld_candidates+' incomplete/invalid candidates withheld · last activity '+(latest||'none in this epoch')));
   source.append(make('span','','Epoch '+feed.epoch+' · '+feed.epoch_started_at+' · '+(feed.epoch_reason==='activation'?'new coverage; earlier history not included':'source discontinuity; resumed from new boundary, missing history not reconstructed')));
   records.sort((a,b)=>a.utc.localeCompare(b.utc));
   all=prepare(records);const retained=new Set(all.map(r=>r.key));for(const k of opened)if(!retained.has(k))opened.delete(k);
