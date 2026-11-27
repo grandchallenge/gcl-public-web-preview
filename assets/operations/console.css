@@ -25,3 +25,5 @@ header h1{font-size:25px;margin:5px 0 4px}.subtitle{font-size:11px}.connection{d
 .source-line{font:12px/1.5 var(--mono);color:var(--muted);border-bottom:1px solid var(--rule);padding:10px 0;overflow-wrap:anywhere}.source-line a{color:var(--input)}.source-line strong{color:var(--ink)}.source-line span{display:block}.connection.published .dot{background:var(--output)}
 
 .metric[data-stream=result] .series i{background:var(--output)}.metric[data-stream=failure] .series i{background:var(--error)}.request .stream{color:var(--input)}.result .stream{color:var(--output)}.failure .stream{color:var(--error)}
+
+@media(max-width:760px){#refresh{grid-column:1/-1;justify-self:start}#follow{font-size:10px}}

@@ -37,7 +37,7 @@ function makeRow(r){
  const detail=make('div','detail');n.append(detail);const expand=()=>{if(n.open){opened.add(r.key);if(!detail.childNodes.length)fillDetails(detail,r)}else opened.delete(r.key)};
  summary.addEventListener('click',()=>{if(!n.open&&follow)setFollow(false)});n.addEventListener('toggle',expand);if(opened.has(r.key)){n.open=true;expand()}return n
 }
-function setFollow(v){follow=v;el('follow').setAttribute('aria-pressed',String(v));el('follow').textContent=v?'Following latest':'Follow latest';if(v)table.scrollTop=table.scrollHeight}
+function setFollow(v){follow=v;el('follow').setAttribute('aria-pressed',String(v));el('follow').textContent=v?'Following latest':'Follow latest (feed updating)';if(v)table.scrollTop=table.scrollHeight}
 function render(){
  const q=el('search').value.trim().toLowerCase(),visible=all.filter(r=>(filter==='all'||(filter==='research'&&r.j.release)||r.g===filter)&&(!q||(r.message+' '+r.title+' '+r.event).toLowerCase().includes(q)));
  const oldTop=table.scrollTop,before=[...log.children].find(n=>n.offsetTop+n.offsetHeight>=oldTop),anchor=before?.dataset.key,offset=before?before.offsetTop-oldTop:0;
@@ -75,35 +75,54 @@ function freshness(){
 }
 const RAW_BASE='https://raw.githubusercontent.com/grandchallenge/grandchallenge.github.io/';
 const REF_URL='https://api.github.com/repos/grandchallenge/grandchallenge.github.io/git/ref/heads/control-public-feed';
-const REF_KEY='gcl-public-activity-ref-check-v2';
+const REF_KEY='gcl-public-activity-ref-check-v3';
+const REF_INTERVAL=75000;
 let lastRefCheck=-Infinity;
 function reserveRefCheck(){
  const t=Date.now();let previous=lastRefCheck;
  try{const saved=Number(localStorage.getItem(REF_KEY));if(Number.isFinite(saved))previous=Math.max(previous,saved)}catch{}
- if(t-previous<120000)return false;
+ if(t-previous<REF_INTERVAL)return false;
  lastRefCheck=t;try{localStorage.setItem(REF_KEY,String(t))}catch{}
  return true
 }
 async function readText(url,max=100000){
- const response=await fetch(url,{cache:'no-cache',signal:controller.signal,credentials:'omit',referrerPolicy:'no-referrer',redirect:'error'});
- if(!response.ok)throw Error('feed');
- const raw=await response.text();if(raw.length>max)throw Error('size');return raw
+ const parent=controller.signal,child=new AbortController(),abort=()=>child.abort();
+ parent.addEventListener('abort',abort,{once:true});
+ if(parent.aborted)abort();
+ const timer=setTimeout(abort,3000);
+ try{
+  const response=await fetch(url,{cache:'no-cache',signal:child.signal,credentials:'omit',referrerPolicy:'no-referrer',redirect:'error'});
+  if(!response.ok)throw Error('feed');
+  const raw=await response.text();if(raw.length>max)throw Error('size');return raw
+ }finally{clearTimeout(timer);parent.removeEventListener('abort',abort)}
+}
+function publicationTime(raw){
+ const data=raw===null?null:parse(raw);
+ return data?.schema==='GCL_CONTROL_ACTIVITY_FEED/2'&&typeof data.published_at==='string'?Date.parse(data.published_at):NaN
 }
 async function readPublication(windowId){
- let raw=null,primaryError=null;
- try{raw=await readText(RAW_BASE+'control-public-feed/activity.json?window='+windowId)}catch(e){primaryError=e}
- const parsed=raw===null?null:parse(raw);
- const at=parsed&&typeof parsed.published_at==='string'?Date.parse(parsed.published_at):NaN;
- if((!Number.isFinite(at)||Date.now()-at>45000)&&!controller.signal.aborted&&reserveRefCheck()){
+ // Raw GitHub's CDN can ignore query cache-busting. Independently cached
+ // short and full-ref paths give two bounded public delivery candidates.
+ const paths=['control-public-feed','refs/heads/control-public-feed'];
+ const reads=await Promise.allSettled(paths.map(path=>readText(RAW_BASE+path+'/activity.json?window='+windowId)));
+ let raw=null,at=-Infinity;
+ for(const result of reads){
+  if(result.status!=='fulfilled')continue;
+  const candidateTime=publicationTime(result.value);
+  if(Number.isFinite(candidateTime)&&candidateTime>=at){raw=result.value;at=candidateTime}
+ }
+ // A healthy publisher may heartbeat only every five minutes. Distinguish
+ // old delivery from a failed fetch and keep a bounded anonymous API budget.
+ if((raw===null||Date.now()-at>30000)&&!controller.signal.aborted&&reserveRefCheck()){
   try{
-   const ref=JSON.parse(await readText(REF_URL+'?window='+Math.floor(Date.now()/120000),8192));
+   const ref=JSON.parse(await readText(REF_URL+'?window='+Math.floor(Date.now()/REF_INTERVAL),8192));
    if(ref.ref!=='refs/heads/control-public-feed'||ref.object?.type!=='commit'||typeof ref.object.sha!=='string'||!/^[0-9a-f]{40}$/.test(ref.object.sha))throw Error('ref');
    const immutable=await readText(RAW_BASE+ref.object.sha+'/activity.json');
-   const candidate=JSON.parse(immutable);
-   if(candidate.schema==='GCL_CONTROL_ACTIVITY_FEED/2'&&Number.isFinite(Date.parse(candidate.published_at))&&(!Number.isFinite(at)||Date.parse(candidate.published_at)>=at))return immutable
-  }catch(e){/* Keep the ordinary response or the previous verified display. */}
+   const candidateTime=publicationTime(immutable);
+   if(Number.isFinite(candidateTime)&&candidateTime>=at)return immutable
+  }catch(e){/* Keep the newest available public response. */}
  }
- if(raw===null)throw primaryError||Error('feed');return raw
+ if(raw===null)throw Error('feed');return raw
 }
 async function tick(force=false){
  if(inFlight||paused||document.hidden)return;
@@ -190,6 +209,7 @@ async function tick(force=false){
 }
 document.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{filter=b.dataset.filter;document.querySelectorAll('[data-filter]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));render()});
 el('search').addEventListener('input',()=>{if(follow)setFollow(false);render()});el('follow').onclick=()=>setFollow(!follow);
-el('pause').onclick=()=>{paused=!paused;el('pause').setAttribute('aria-pressed',String(paused));el('pause').textContent=paused?'Resume feed':'Pause feed';if(paused){controller?.abort();status('Paused','')}else tick(true)};
+el('refresh').onclick=()=>{if(!paused)tick(true)};
+el('pause').onclick=()=>{paused=!paused;el('pause').setAttribute('aria-pressed',String(paused));el('pause').textContent=paused?'Resume feed':'Pause feed';el('refresh').disabled=paused;if(paused){controller?.abort();status('Paused','')}else tick(true)};
 let userScroll=false;for(const name of ['wheel','touchmove','pointerdown','keydown'])table.addEventListener(name,()=>{userScroll=true},{passive:true});table.addEventListener('scroll',()=>{if(userScroll&&follow&&table.scrollHeight-table.clientHeight-table.scrollTop>45)setFollow(false);userScroll=false},{passive:true});
 document.addEventListener('visibilitychange',()=>{if(document.hidden)controller?.abort();else tick(true)});tick();setInterval(tick,5000);

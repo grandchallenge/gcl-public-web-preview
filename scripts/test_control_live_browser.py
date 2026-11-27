@@ -4,6 +4,7 @@ from datetime import datetime,timezone
 from playwright.sync_api import sync_playwright,expect
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 URL="https://raw.githubusercontent.com/grandchallenge/grandchallenge.github.io/control-public-feed/activity.json"
+ALT=URL.replace("/control-public-feed/","/refs/heads/control-public-feed/")
 REF="https://api.github.com/repos/grandchallenge/grandchallenge.github.io/git/ref/heads/control-public-feed"
 IMM="https://raw.githubusercontent.com/grandchallenge/grandchallenge.github.io/"+"a"*40+"/activity.json"
 NOW=1800000000000
@@ -29,6 +30,8 @@ try:
                 calls.append(route.request.url)
                 route.fulfill(json=payload[0],headers={"Access-Control-Allow-Origin":"*"})
             q.route(URL+"?window=*",serve)
+            alternate=[None]
+            q.route(ALT+"?window=*",lambda route:route.fulfill(json=alternate[0] if alternate[0] is not None else payload[0],headers={"Access-Control-Allow-Origin":"*"}))
             ref_calls=[]; immutable=[None]
             def ref(route):
                 ref_calls.append(route.request.url)
@@ -120,6 +123,14 @@ try:
             q.evaluate("tick(true)")
             expect(q.locator("#state")).to_contain_text("unavailable")
             assert "PRIVATE_CANARY" not in q.locator("body").inner_text()
+            # Stale short branch even with query cache busting; full ref advances.
+            q.evaluate(f"Date.now=()=>{NOW+700000}")
+            payload[0]={**feed,"epoch":2,"epoch_reason":"source_gap","epoch_started_at":stamp(NOW+615000),"published_at":stamp(NOW+620000),"records":[]}
+            alternate[0]={**payload[0],"published_at":stamp(NOW+700000),"records":[{**rows[0],"accepted_at":stamp(NOW+699000),"finished_at":stamp(NOW+699500)}]}
+            q.locator("#refresh").click()
+            expect(q.locator("#updated")).to_contain_text(stamp(NOW+700000)[11:19])
+            expect(q.locator(".event")).to_have_count(2)
+            alternate[0]=None
             # Stale raw branch, fresh immutable fallback, and rollback prevention.
             q.evaluate(f"Date.now=()=>{NOW+800000}")
             payload[0]={**feed,"epoch":2,"epoch_reason":"source_gap","epoch_started_at":stamp(NOW+615000),"published_at":stamp(NOW+620000),"records":[]}
